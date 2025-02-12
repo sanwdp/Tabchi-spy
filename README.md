@@ -1,4 +1,4 @@
-<div align="center"><img src="https://raw.githubusercontent.com/MrAminiDev/NebulaTunnel/main/Tabchi-Mokhber.png" width="500"></div>
+<div align="center"><img src="https://raw.githubusercontent.com/MrAminiDev/Tabchi-Mokhber/main/Tabchi-Mokhber.png" width="500"></div>
 <div align="center"><br>
 
   برای توضیحات <a href="https://github.com/MrAminiDev/Tabchi-Mokhber/blob/main/README-fa.md"> فارسی اینجا بزنید </a>
