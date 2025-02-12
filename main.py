@@ -4,14 +4,15 @@ from telethon import TelegramClient, events, functions
 import asyncio
 import random
 import os
-import requests
 import json
 import re
+import httpx
+
 
 # Configuration
-API_ID = '****'  # Replace with your API ID
-API_HASH = '*****'  # Replace with your API hash
-BOT_OWNER_ID = ID # Replace with the bot owner's Telegram user ID
+API_ID = '2040'  # Replace with your API ID
+API_HASH = 'b18441a1ff607e10a989891a5462e627'  # Replace with your API hash
+BOT_OWNER_ID = 11111111 # Replace with the bot owner's Telegram user ID
 USERS_FILE = 'user.txt'
 MESSAGE_FILE = 'pm.txt'
 BIO_API_URL = 'https://api.codebazan.ir/bio'
@@ -41,9 +42,8 @@ def save_settings(settings):
         json.dump(settings, f)
 
 # Create the client
-client = TelegramClient('session', API_ID, API_HASH)
+client = TelegramClient('session', API_ID, API_HASH).start()
 settings = load_settings()
-client.start()
 
 # Helper functions
 def save_user(user_id):
@@ -62,12 +62,29 @@ def save_user(user_id):
 
 async def update_bio():
     try:
-        response = requests.get(BIO_API_URL)
-        if response.status_code == 200:
-            bio = response.text
-            await client(functions.account.UpdateProfileRequest(about=bio))
+        async with httpx.AsyncClient(follow_redirects=True) as req:
+            response = await req.get(BIO_API_URL, timeout=5)
+            if response.status_code == 200:
+                bio = response.text.strip()
+            else:
+                raise Exception(f"API request failed with status {response.status_code}")
     except Exception as e:
-        print(f"Error updating bio: {e}")
+        try:
+            with open("bio.json", "r", encoding="utf-8") as file:
+                data = json.load(file)
+                bios = data.get("bio", [])
+                if not bios:
+                    return "بیو برای ست شدن یافت نشد."
+                bio = random.choice(bios)
+        except (FileNotFoundError, json.JSONDecodeError) as file_error:
+            return f"Error: {file_error}"
+
+    try:
+        await client(functions.account.UpdateProfileRequest(about=bio))
+        return f"**📩 بیوگرافی ست شده:**\n {bio}"
+    except Exception as e:
+        return f"Error updating bio: {e}"
+    
 async def get_last_seen(user_id):
     try:
         user = await client.get_entity(user_id)
@@ -200,8 +217,8 @@ async def message_handler(event):
         elif message == 'bioon':
             settings['random_bio'] = True
             save_settings(settings)
-            await update_bio()  
-            await event.reply("بیوگرافی تصادفی فعال شد.")
+            result = await update_bio()
+            await event.reply(result)
         elif message == 'biooff':
             settings['random_bio'] = False
             save_settings(settings)
@@ -242,19 +259,19 @@ async def message_handler(event):
             await event.reply(info_text)
         elif message == 'help':
             help_text = (
-                "📌 *راهنمای دستورات ربات*\n"
+                "📌 **راهنمای دستورات ربات**\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "🤖 *وضعیت ربات:*\n"
+                "🤖 **وضعیت ربات:**\n"
                 "🔹 `bot` - بررسی آنلاین بودن ربات\n"
                 "🔹 `info` - نمایش اطلاعات کلی ربات\n"
                 "🔹 `checkban` - بررسی مسدود شدن ربات\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "📩 *ارسال پیام‌ها:*\n"
+                "📩 **ارسال پیام‌ها:**\n"
                 "📌 `sendpm` - ارسال پیام به تمام کاربران ذخیره‌شده\n"
                 "📌 `sendreport` - دریافت گزارش ارسال پیام‌ها\n"
                 "📌 `setlimit 10` - تنظیم محدودیت ارسال روزانه (عدد قابل تغییر است)\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "👥 *مدیریت کاربران:*\n"
+                "👥 **مدیریت کاربران:**\n"
                 "🟢 `saveuseron` - فعال‌سازی ذخیره کاربران گروه‌ها\n"
                 "🔴 `saveuseroff` - غیرفعال‌سازی ذخیره کاربران گروه‌ها\n"
                 "🟢 `chatuseron` - فعال‌سازی ذخیره کاربران پیام‌دهنده در گروه‌ها\n"
@@ -262,7 +279,7 @@ async def message_handler(event):
                 "🟢 `InvalidUserOn` - حذف خودکار کاربران نامعتبر\n"
                 "🔴 `InvalidUserOff` - غیرفعال‌سازی حذف کاربران نامعتبر\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "🔧 *تنظیمات و قابلیت‌ها:*\n"
+                "🔧 **تنظیمات و قابلیت‌ها:**\n"
                 "🔹 `bioon` - فعال‌سازی بیوگرافی تصادفی\n"
                 "🔹 `biooff` - غیرفعال‌سازی بیوگرافی تصادفی\n"
                 "🔹 `OnLastseen` - ارسال پیام فقط به کاربران فعال در ۲۴ ساعت اخیر\n"
@@ -270,7 +287,7 @@ async def message_handler(event):
                 "🔹 `autojoinon` - فعال‌سازی ورود خودکار به گروه‌ها از طریق لینک\n"
                 "🔹 `autojoinoff` - غیرفعال‌سازی ورود خودکار به گروه‌ها\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "❓ *راهنما:*\n"
+                "❓ **راهنما:**\n"
                 "📌 `help` - نمایش لیست دستورات\n"
             )
             await event.reply(help_text, parse_mode='markdown')
@@ -288,5 +305,4 @@ async def chat_action_handler(event):
 
 # Run the client
 print("ربات در حال اجرا است...")
-client.start()
 client.run_until_disconnected()
