@@ -7,15 +7,15 @@
 <br><br>
 
 # 🤖 Mokhber Bot - Automated Advertisement & User Collection Bot
-Mokhber is an advanced Telegram bot designed for automated advertising and user collection. It allows you to gather user IDs from groups and private chats, store them, and send targeted promotional messages efficiently. With smart scheduling, random delays, and active user detection, Mokhber ensures optimal message delivery while minimizing the risk of getting restricted by Telegram.
+Mokhber is an advanced Telegram bot designed for automated advertising and user collection. It allows you to gather user IDs from groups and private chats, store them, and send targeted promotional messages efficiently. With smart scheduling, random delays, and active user detection, Mokhber ensures optimal message delivery while minimizing the risk of getting restricted by Telegram.<br>
 Key Features:
 
-✅ Automatic user collection from groups and private chats
-✅ Bulk messaging with smart delays and scheduling
-✅ Randomized bio updates for a more natural presence
-✅ Active user filtering to improve engagement rates
-✅ Multi-group message broadcasting for wider reach
-✅ Automated reports and delivery tracking
+✅ Automatic user collection from groups and private chats<br>
+✅ Bulk messaging with smart delays and scheduling<br>
+✅ Randomized bio updates for a more natural presence<br>
+✅ Active user filtering to improve engagement rates<br>
+✅ Multi-group message broadcasting for wider reach<br>
+✅ Automated reports and delivery tracking<br>
 
 Mokhber is ideal for businesses and individuals who want to expand their audience and maximize their reach in Telegram while maintaining security and efficiency.
 
