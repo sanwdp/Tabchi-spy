@@ -8,9 +8,9 @@ import requests
 import json
 
 # Configuration
-API_ID = '***'  # Replace with your API ID
-API_HASH = '****'  # Replace with your API hash
-BOT_OWNER_ID = ID  # Replace with the bot owner's Telegram user ID
+API_ID = '****'  # Replace with your API ID
+API_HASH = '*****'  # Replace with your API hash
+BOT_OWNER_ID = ID # Replace with the bot owner's Telegram user ID
 USERS_FILE = 'user.txt'
 MESSAGE_FILE = 'pm.txt'
 BIO_API_URL = 'https://api.codebazan.ir/bio'
@@ -19,8 +19,11 @@ SETTINGS_FILE = 'settings.json'
 # Default settings
 default_settings = {
     'save_user': True,
-    'chat_user': False,  # Default to False, will be activated by chatuseron
-    'random_bio': False
+    'chat_user': False,
+    'random_bio': False,
+    'filter_last_seen': False,
+    'remove_invalid_users': False,
+    'daily_limit': 0
 }
 
 # Load settings from file
@@ -56,30 +59,105 @@ def save_user(user_id):
     else:
         print(f"User {user_id} already exists.")
 
-# Update bio with random text
 async def update_bio():
     try:
         response = requests.get(BIO_API_URL)
         if response.status_code == 200:
             bio = response.text
-            # Update the bio using UpdateProfileRequest
             await client(functions.account.UpdateProfileRequest(about=bio))
     except Exception as e:
         print(f"Error updating bio: {e}")
+async def get_last_seen(user_id):
+    try:
+        user = await client.get_entity(user_id)
+        if hasattr(user.status, 'was_online'):
+            return user.status.was_online
+    except Exception as e:
+        print(f"Error getting last seen for {user_id}: {e}")
+    return None
+async def check_ban():
+    try:
+        await client.send_message(BOT_OWNER_ID, "Checking ban status...")
+        return "ربات فعال است."
+    except:
+        return "⚠️ ربات بن شده و قادر به ارسال پیام نیست."
 
-# Handlers
+async def send_messages():
+    if os.path.exists(USERS_FILE) and os.path.exists(MESSAGE_FILE):
+        with open(USERS_FILE, 'r', encoding='utf-8') as f:
+            users = f.read().splitlines()
+
+        with open(MESSAGE_FILE, 'r', encoding='utf-8') as f:
+            message_content = f.read()
+
+        sent_count = 0
+        failed_count = 0
+        removed_users = 0
+
+        for user in users:
+            if settings['daily_limit'] > 0 and sent_count >= settings['daily_limit']:
+                break
+            try:
+                user_info = await client.get_entity(int(user))
+                if settings['filter_last_seen'] and user_info.status and isinstance(user_info.status, functions.account.UpdateProfileRequest) and user_info.status.was_online.days > 1:
+                    continue
+                await client.send_message(int(user), message_content)
+                sent_count += 1
+                await asyncio.sleep(random.randint(1, 10))
+            except Exception as e:
+                failed_count += 1
+                if settings['remove_invalid_users'] and 'deleted/deactivated' in str(e).lower():
+                    users.remove(user)
+                    removed_users += 1
+
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            f.writelines("\n".join(users))
+
+        return f"📊 گزارش ارسال پیام:\n✅ ارسال موفق: {sent_count}\n❌ ارسال ناموفق: {failed_count}\n🚫 حذف کاربران غیرفعال: {removed_users}"
+    return "فایل‌های مورد نیاز وجود ندارند."
+
 @client.on(events.NewMessage)
 async def message_handler(event):
     sender_id = event.sender_id
     message = event.raw_text.lower()
-
-    # Save chatting users if chat_user is enabled
-    if settings['chat_user'] and event.is_group:  # Check if the message is from a group
+	
+    if settings['chat_user'] and event.is_group: 
         save_user(sender_id)
 
     if sender_id == BOT_OWNER_ID:
         if message == 'bot':
             await event.reply("سلام، آنلاینم! کارت رو بگو.")
+        elif message == 'onlastseen':
+            settings['last_seen_filter'] = True
+            save_settings(settings)
+            await event.reply("فیلتر آخرین بازدید فعال شد.")
+        elif message == 'offlastseen':
+            settings['filter_last_seen'] = False
+            save_settings(settings)
+            await event.reply("فیلتر آخرین بازدید غیرفعال شد.")
+        elif message == 'invaliduseron':
+            settings['remove_invalid_users'] = True
+            save_settings(settings)
+            await event.reply("حذف کاربران نامعتبر فعال شد.")
+        elif message == 'invaliduseroff':
+            settings['remove_invalid_users'] = False
+            save_settings(settings)
+            await event.reply("حذف کاربران نامعتبر غیرفعال شد.")
+        elif message.startswith('setlimit'):
+            try:
+                limit = int(message.split()[1])
+                settings['daily_limit'] = limit
+                save_settings(settings)
+                await event.reply(f"حد ارسال روزانه روی {limit} پیام تنظیم شد.")
+            except:
+                await event.reply("فرمت اشتباه است. استفاده صحیح: setlimit 50")
+        elif message == 'sendreport':
+            report = await send_messages()
+            await event.reply(report)
+        elif message == 'checkban':
+            status = await check_ban()
+            await event.reply(status)
+
         elif message == 'saveuseron':
             settings['save_user'] = True
             save_settings(settings)
@@ -151,7 +229,15 @@ async def message_handler(event):
                 "bioon: فعال‌سازی بیوگرافی تصادفی\n"
                 "biooff: غیرفعال‌سازی بیوگرافی تصادفی\n"
                 "info: نمایش اطلاعات ربات\n"
+                "OnLastseen: پيام به کاربران فعال در 24 ساعت گذشته ارسال بشه\n"
+                "OffLastseen: غير فعال کردن ارسال به کاربران فعال و ارسال پيام به تمامي ليست\n"
+                "InvalidUserOn: حذف کاربران غير فعال و حذف شده از ليست\n"
+                "InvalidUserOff: غيرفعال کردن حذف کاربران غيرفعال و حذف شده\n"
+                "sendreport: دريافت گزارش ارسال پيام\n"
+                "setlimit 10: اعمال محدوديت ارسال پيام روزانه به 10 عدد (امکان تغيير عدد وجود دارهو ميتويند مقدار دلخواه بزنيد\n"
+                "checkban: بررسي مسدود شدن ربات"
                 "help: نمایش لیست دستورات"
+                
             )
             await event.reply(help_text)
 
