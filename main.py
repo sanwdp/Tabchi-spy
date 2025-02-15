@@ -1,21 +1,25 @@
 # Developed By MrAmini
 
-from telethon import TelegramClient, events, functions, types
 import asyncio
 import random
 import os
 import json
 import re
 import httpx
+import logging
+from telethon import TelegramClient, events, functions, types
 
+# تنظیمات لاگینگ
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configuration
-API_ID = '2040'  # Replace with your API ID
-API_HASH = 'b18441a1ff607e10a989891a5462e627'  # Replace with your API hash
-BOT_OWNER_ID = AdminID # Replace with the bot owner's Telegram user ID
+API_ID = 'API_ID'  # جایگزین کنید با API ID خود
+API_HASH = 'API_HASH'  # جایگزین کنید با API HASH خود
+BOT_OWNER_ID = ID  # جایگزین کنید با آی‌دی تلگرام مالک ربات
 USERS_FILE = 'user.txt'
 MESSAGE_FILE = 'pm.txt'
-BIO_API_URL = 'https://api.codebazan.ir/bio'
+BIO_API_URL = 'https://api.codebazan.ir/bio/'
 SETTINGS_FILE = 'settings.json'
 ACCOUNTS_FILE = 'accounts.json'
 
@@ -30,54 +34,59 @@ default_settings = {
 }
 
 def load_accounts():
-    if os.path.exists("accounts.json"):
-        with open("accounts.json", "r", encoding="utf-8") as f:
+    if os.path.exists(ACCOUNTS_FILE):
+        with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
             try:
                 data = json.load(f)
-                if isinstance(data, dict): 
+                if isinstance(data, dict):
                     return data
                 else:
-                    return {}  
+                    return {}
             except json.JSONDecodeError:
-                return {}  
-    return {}  
+                logger.error("خطا در رمزگشایی فایل حساب‌ها (JSON).")
+                return {}
+    return {}
 
 def save_accounts(accounts):
-    with open(ACCOUNTS_FILE, 'w') as f:
-        json.dump(accounts, f)
+    with open(ACCOUNTS_FILE, 'w', encoding="utf-8") as f:
+        json.dump(accounts, f, ensure_ascii=False, indent=4)
 
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, 'r') as f:
-            return json.load(f)
+        with open(SETTINGS_FILE, 'r', encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                logger.error("خطا در رمزگشایی فایل تنظیمات، از تنظیمات پیش‌فرض استفاده می‌شود.")
+                return default_settings
     else:
         return default_settings
 
 def save_settings(settings):
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(settings, f)
+    with open(SETTINGS_FILE, 'w', encoding="utf-8") as f:
+        json.dump(settings, f, ensure_ascii=False, indent=4)
 
+# راه‌اندازی کلاینت اصلی
 client = TelegramClient('session', API_ID, API_HASH).start()
 settings = load_settings()
 
-def save_user(user_id):
+def save_user(user_id: int):
     if not os.path.exists(USERS_FILE):
         open(USERS_FILE, 'w').close()
 
-    with open(USERS_FILE, 'r') as f:
+    with open(USERS_FILE, 'r', encoding="utf-8") as f:
         users = set(f.read().splitlines())
 
     if str(user_id) not in users:
-        with open(USERS_FILE, 'a') as f:
+        with open(USERS_FILE, 'a', encoding="utf-8") as f:
             f.write(f"{user_id}\n")
-        print(f"User {user_id} saved successfully.")
+        logger.info(f"کاربر {user_id} با موفقیت ذخیره شد.")
     else:
-        print(f"User {user_id} already exists.")
+        logger.info(f"کاربر {user_id} قبلاً وجود دارد.")
 
 async def set_new_pm(event):
     try:
         text = event.raw_text
-
         if not text.lower().startswith("setnewpm"):
             await event.reply("⚠️ دستور نامعتبر است. لطفاً پیام خود را به درستی وارد کنید.")
             return
@@ -87,13 +96,11 @@ async def set_new_pm(event):
             await event.reply("⚠️ لطفاً پیام جدید خود را بعد از `setnewpm` در خط جدید وارد کنید.")
             return
 
-        new_message = parts[1].strip()  
-
-        with open("pm.txt", "w", encoding="utf-8") as f:
+        new_message = parts[1].strip()
+        with open(MESSAGE_FILE, "w", encoding="utf-8") as f:
             f.write(new_message)
 
         await event.reply("✅ پیام جدید با موفقیت ذخیره شد.")
-
     except Exception as e:
         await event.reply(f"⚠️ خطا در ذخیره پیام: {e}")
 
@@ -106,6 +113,7 @@ async def update_bio():
             else:
                 raise Exception(f"API request failed with status {response.status_code}")
     except Exception as e:
+        logger.warning(f"خطا در دریافت بیو از API: {e}. تلاش برای استفاده از فایل محلی.")
         try:
             with open("bio.json", "r", encoding="utf-8") as file:
                 data = json.load(file)
@@ -128,15 +136,16 @@ async def get_last_seen(user_id):
         if hasattr(user.status, 'was_online'):
             return user.status.was_online
     except Exception as e:
-        print(f"Error getting last seen for {user_id}: {e}")
+        logger.error(f"خطا در دریافت آخرین بازدید برای {user_id}: {e}")
     return None
+
 async def check_ban():
     try:
         await client.send_message(BOT_OWNER_ID, "Checking ban status...")
         return "ربات فعال است."
-    except:
+    except Exception as e:
+        logger.error(f"خطا در بررسی بن: {e}")
         return "⚠️ ربات بن شده و قادر به ارسال پیام نیست."
-        
 
 async def join_group_from_message(event):
     if not settings.get('auto_join', False):
@@ -146,9 +155,9 @@ async def join_group_from_message(event):
     if "t.me/" not in message_text:
         return
 
-    # بررسی اینکه لینک مربوط به گروه خصوصی است یا عمومی
+    # بررسی لینک گروه خصوصی یا عمومی
     if "joinchat" in message_text or "t.me/+" in message_text:
-        # لینک خصوصی (کد دوم شما)
+        # لینک خصوصی
         private_link_pattern = r"https?:\/\/t\.me\/(?:joinchat\/|\+)?([a-zA-Z0-9_-]+)"
         private_match = re.search(private_link_pattern, message_text)
         if private_match:
@@ -159,7 +168,7 @@ async def join_group_from_message(event):
             except Exception as e:
                 await event.reply(f"❌ خطا در پیوستن به گروه: {str(e)}")
     else:
-        # لینک عمومی (کد اول شما)
+        # لینک عمومی
         group_link_pattern = r"(https?:\/\/t\.me\/(?:joinchat\/)?([a-zA-Z0-9_-]+))"
         match = re.search(group_link_pattern, message_text)
         if match:
@@ -169,12 +178,10 @@ async def join_group_from_message(event):
                 await event.reply("✅ به گروه عمومی پیوستم!")
             except Exception as e:
                 await event.reply(f"❌ خطا در پیوستن به گروه: {str(e)}")
-        
-@client.on(events.NewMessage)
-async def message_handler(event):
-    sender_id = event.sender_id
-    message = event.raw_text.lower()
 
+# handler جداگانه برای پردازش ورود به گروه‌ها (برای جلوگیری از تداخل با سایر handlers)
+@client.on(events.NewMessage)
+async def group_join_handler(event):
     await join_group_from_message(event)
 
 async def send_messages():
@@ -185,7 +192,8 @@ async def send_messages():
         with open(MESSAGE_FILE, 'r', encoding='utf-8') as f:
             message_content = f.read()
 
-        active_accounts = [phone for phone, data in load_accounts().items() if data["status"] == "active"]
+        accounts_data = load_accounts()
+        active_accounts = [phone for phone, data in accounts_data.items() if data.get("status") == "active"]
         if not active_accounts:
             return "⛔ هیچ اکانت فعالی برای ارسال پیام وجود ندارد."
 
@@ -196,28 +204,39 @@ async def send_messages():
         failed_count = 0
         removed_users = 0
 
-        for index, user in enumerate(users):
+        # استفاده از یک کپی از لیست کاربران جهت جلوگیری از بروز مشکل هنگام حذف
+        for index, user in enumerate(users.copy()):
             if settings['daily_limit'] > 0 and sent_count >= settings['daily_limit']:
                 break
 
             current_account = active_accounts[index % total_accounts]
-            client = TelegramClient(f'session_{current_account}', API_ID, API_HASH)
-            await client.connect()
-
+            # استفاده از کلاینت جداگانه برای هر اکانت به منظور جلوگیری از سردرگمی در استفاده از کلاینت اصلی
+            acc_client = TelegramClient(f'session_{current_account}', API_ID, API_HASH)
             try:
-                await client.send_message(int(user), message_content)
-                sent_count += 1
-                await asyncio.sleep(random.randint(1, 5))
-            except Exception as e:
+                await acc_client.connect()
+                try:
+                    await acc_client.send_message(int(user), message_content)
+                    sent_count += 1
+                    await asyncio.sleep(random.randint(1, 5))
+                except Exception as e:
+                    failed_count += 1
+                    logger.error(f"خطا در ارسال پیام به {user} با اکانت {current_account}: {e}")
+                    if settings['remove_invalid_users'] and 'deleted/deactivated' in str(e).lower():
+                        users.remove(user)
+                        removed_users += 1
+                finally:
+                    await acc_client.disconnect()
+            except Exception as conn_e:
+                logger.error(f"خطا در اتصال با اکانت {current_account}: {conn_e}")
                 failed_count += 1
-                if settings['remove_invalid_users'] and 'deleted/deactivated' in str(e).lower():
-                    users.remove(user)
-                    removed_users += 1
 
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            f.writelines("\n".join(users))
+            f.write("\n".join(users))
 
-        return f"📊 گزارش ارسال پیام:\n✅ ارسال موفق: {sent_count}\n❌ ارسال ناموفق: {failed_count}\n🚫 حذف کاربران غیرفعال: {removed_users}"
+        return (f"📊 گزارش ارسال پیام:\n"
+                f"✅ ارسال موفق: {sent_count}\n"
+                f"❌ ارسال ناموفق: {failed_count}\n"
+                f"🚫 حذف کاربران غیرفعال: {removed_users}")
     return "فایل‌های مورد نیاز وجود ندارند."
 
 @client.on(events.NewMessage(pattern=r'^addacc (\+\d+)$'))
@@ -269,6 +288,8 @@ async def verify_account(event):
         await event.reply(f"✅ شماره {phone_number} با موفقیت اضافه شد.")
     except Exception as e:
         await event.reply(f"⚠️ خطا در تأیید کد: {e}")
+    finally:
+        await new_client.disconnect()
 
 @client.on(events.NewMessage(pattern=r'^accs$'))
 async def list_accounts(event):
@@ -282,7 +303,7 @@ async def list_accounts(event):
 
     msg = "**📋 لیست اکانت‌ها:**\n"
     for phone, data in accounts.items():
-        status = "✅ فعال" if data["status"] == "active" else "⏳ در انتظار تأیید"
+        status = "✅ فعال" if data.get("status") == "active" else "⏳ در انتظار تأیید"
         msg += f"- {phone}: {status}\n"
 
     await event.reply(msg)
@@ -302,22 +323,28 @@ async def delete_account(event):
     del accounts[phone_number]
     save_accounts(accounts)
 
-    os.remove(f'session_{phone_number}.session')  # حذف فایل سشن
+    session_file = f'session_{phone_number}.session'
+    if os.path.exists(session_file):
+        try:
+            os.remove(session_file)  # حذف فایل سشن
+        except Exception as e:
+            logger.error(f"خطا در حذف فایل سشن {session_file}: {e}")
     await event.reply(f"✅ اکانت {phone_number} با موفقیت حذف شد.")
 
 @client.on(events.NewMessage)
-async def message_handler(event):
+async def command_handler(event):
     sender_id = event.sender_id
     message = event.raw_text.lower()
-	
-    if settings['chat_user'] and event.is_group: 
+    
+    # ذخیره کاربر چت در گروه (در صورت فعال بودن)
+    if settings.get('chat_user') and event.is_group:
         save_user(sender_id)
 
     if sender_id == BOT_OWNER_ID:
         if message == 'bot':
             await event.reply("سلام، آنلاینم! کارت رو بگو.")
         elif message == 'onlastseen':
-            settings['last_seen_filter'] = True
+            settings['filter_last_seen'] = True  # استفاده از کلید ثابت
             save_settings(settings)
             await event.reply("فیلتر آخرین بازدید فعال شد.")
         elif message == 'offlastseen':
@@ -338,15 +365,14 @@ async def message_handler(event):
                 settings['daily_limit'] = limit
                 save_settings(settings)
                 await event.reply(f"حد ارسال روزانه روی {limit} پیام تنظیم شد.")
-            except:
+            except Exception as e:
                 await event.reply("فرمت اشتباه است. استفاده صحیح: setlimit 50")
         elif message == 'sendreport':
             report = await send_messages()
             await event.reply(report)
         elif message == 'checkban':
-            status = await check_ban()
-            await event.reply(status)
-
+            status_msg = await check_ban()
+            await event.reply(status_msg)
         elif message == 'saveuseron':
             settings['save_user'] = True
             save_settings(settings)
@@ -372,7 +398,6 @@ async def message_handler(event):
             settings['random_bio'] = False
             save_settings(settings)
             await event.reply("بیوگرافی تصادفی غیرفعال شد.")
-
         elif message == 'autojoinon':
             settings['auto_join'] = True
             save_settings(settings)
@@ -381,20 +406,18 @@ async def message_handler(event):
             settings['auto_join'] = False
             save_settings(settings)
             await event.reply("❌ ورود خودکار به گروه‌ها *غیرفعال* شد.")
-            
-        elif message.lower().startswith("setnewpm"):
-            parts = message.split("\n", 1) 
+        elif message.startswith("setnewpm"):
+            parts = event.raw_text.split("\n", 1)
             if len(parts) < 2:
                 await event.reply("⚠️ لطفاً پیام جدید خود را در خط جدید بعد از `setnewpm` بنویسید.")
                 return
 
-            new_message = parts[1].strip()  
-
-            with open("pm.txt", "w", encoding="utf-8") as f:
+            new_message = parts[1].strip()
+            with open(MESSAGE_FILE, "w", encoding="utf-8") as f:
                 f.write(new_message)
 
             await event.reply("✅ پیام جدید با موفقیت ذخیره شد.")
-            print("New message saved successfully.")
+            logger.info("پیام جدید ذخیره شد.")
         elif message == 'sendpm':
             if os.path.exists(USERS_FILE) and os.path.exists(MESSAGE_FILE):
                 with open(USERS_FILE, 'r', encoding='utf-8') as f:
@@ -408,25 +431,23 @@ async def message_handler(event):
                         await client.send_message(int(user), message_content)
                         await asyncio.sleep(random.randint(1, 10))
                     except Exception as e:
-                        print(f"Error sending message to {user}: {e}")
+                        logger.error(f"خطا در ارسال پیام به {user}: {e}")
 
                 await event.reply("پیام‌ها با موفقیت ارسال شدند.")
             else:
                 await event.reply("فایل‌های مورد نیاز وجود ندارند.")
         elif message == 'info':
-            # Gathering bot's status information
             total_users = 0
             if os.path.exists(USERS_FILE):
-                with open(USERS_FILE, 'r') as f:
+                with open(USERS_FILE, 'r', encoding='utf-8') as f:
                     total_users = len(f.read().splitlines())
 
-            # Generate info text
             info_text = (
-                f"وضعیت ربات: {'آنلاین' if client.is_connected else 'آفلاین'}\n"
+                f"وضعیت ربات: {'آنلاین' if client.is_connected() else 'آفلاین'}\n"
                 f"تعداد کاربران جمع شده: {total_users}\n"
-                f"جمع‌آوری لیست اعضای گروه: {'فعال' if settings['save_user'] else 'غیرفعال'}\n"
-                f"جمع‌آوری یوزرهای درحال چت: {'فعال' if settings['chat_user'] else 'غیرفعال'}\n"
-                f"بیوگرافی تصادفی: {'فعال' if settings['random_bio'] else 'غیرفعال'}\n"
+                f"جمع‌آوری لیست اعضای گروه: {'فعال' if settings.get('save_user') else 'غیرفعال'}\n"
+                f"جمع‌آوری یوزرهای درحال چت: {'فعال' if settings.get('chat_user') else 'غیرفعال'}\n"
+                f"بیوگرافی تصادفی: {'فعال' if settings.get('random_bio') else 'غیرفعال'}\n"
             )
             await event.reply(info_text)
         elif message == 'help':
@@ -455,8 +476,8 @@ async def message_handler(event):
                 "🔧 **تنظیمات و قابلیت‌ها:**\n"
                 "🔹 `bioon` - فعال‌سازی بیوگرافی تصادفی\n"
                 "🔹 `biooff` - غیرفعال‌سازی بیوگرافی تصادفی\n"
-                "🔹 `OnLastseen` - ارسال پیام فقط به کاربران فعال در ۲۴ ساعت اخیر\n"
-                "🔹 `OffLastseen` - ارسال پیام به تمام کاربران ذخیره‌شده\n"
+                "🔹 `onlastseen` - ارسال پیام فقط به کاربران فعال در ۲۴ ساعت اخیر\n"
+                "🔹 `offlastseen` - ارسال پیام به تمام کاربران ذخیره‌شده\n"
                 "🔹 `autojoinon` - فعال‌سازی ورود خودکار به گروه‌ها از طریق لینک\n"
                 "🔹 `autojoinoff` - غیرفعال‌سازی ورود خودکار به گروه‌ها\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
@@ -467,9 +488,7 @@ async def message_handler(event):
                 "📍  example: verifyacc +989191234567 12345\n"
                 "📍 `delacc` - حذف یک اکانت\n"
                 "📍  example: delacc +989191234567\n"
-                "📍 `accstatus` - بررسی اطلاعات اکانت\n"
-                "📍  example: accstatus +989191234567\n"
-                "📍 `listacc` - دریافت لیست اکانت ها\n"
+                "📍 `accs` - دریافت لیست اکانت‌ها\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 "❓ **راهنما:**\n"
                 "📌 `help` - نمایش لیست دستورات\n"
@@ -478,12 +497,12 @@ async def message_handler(event):
 
 @client.on(events.ChatAction)
 async def chat_action_handler(event):
-    if settings['save_user'] and event.user_added:
-        # ذخیره یوزرها فقط از گروه‌ها
+    if settings.get('save_user') and event.user_added:
+        # ذخیره کاربران گروه در مواقعی که کاربر اضافه می‌شود
         if event.chat and event.is_group:
             for user in event.users:
                 save_user(user.id)
 
-# Run the client
-print("ربات در حال اجرا است...")
+# اجرای کلاینت
+logger.info("ربات در حال اجرا است...")
 client.run_until_disconnected()
