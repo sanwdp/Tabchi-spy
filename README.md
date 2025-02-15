@@ -1,7 +1,7 @@
-<div align="center"><img src="https://raw.githubusercontent.com/MrAminiDev/Tabchi-Mokhber/main/Tabchi-Mokhber.png" width="500"></div>
+<div align="center"><img src="https://github.com/sanwdp/Tabchi-spy/blob/main/Tabchi-Mokhber.png?raw=true" width="500"></div>
 <div align="center"><br>
 
-  برای توضیحات <a href="https://github.com/MrAminiDev/Tabchi-Mokhber/blob/main/README-fa.md"> فارسی اینجا بزنید </a>
+  برای توضیحات <a href="https://github.com/sanwdp/Tabchi-spy/blob/main/README-fa.md"> فارسی اینجا بزنید </a>
 
 </div>
 <br><br>
